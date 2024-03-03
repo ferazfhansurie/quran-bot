@@ -5,12 +5,12 @@ const OpenAI = require('openai');
 const config = require('./config');
 
 const openai = new OpenAI({
-    apiKey: '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',
+    apiKey: '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',
     endpoint: 'https://api.openai.com'
 });
 
 async function handleNewMessages(req, res) {
-    const JUTA_AGENT_ID = 'asst_2pYk0Z14FwskCX8UIxDDQmyS';
+    const BILLERT_AGENT_ID = 'asst_2pYk0Z14FwskCX8UIxDDQmyS';
     try {
         console.log('Handling new messages...');
         const receivedMessages = req.body.messages;
@@ -27,7 +27,7 @@ async function handleNewMessages(req, res) {
                 console.log('Received text message:', message);
 
                 // Call the webhook before sending the response to the user
-                const webhookResponse = await callWebhook('https://hook.us1.make.com/ip9bkgkfweqnpkyv1akwkqtgi065y4hp',message.text.body,sender.to,sender.name);
+                const webhookResponse = await callWebhook('https://hook.us1.make.com/9cdty1fgdtlh0cheynfftori14d1ch2a',message.text.body,sender.to,sender.name);
                 
                 if (webhookResponse) {
                     // Send the response from the webhook to the user
@@ -38,14 +38,13 @@ async function handleNewMessages(req, res) {
 
                 console.log('Response sent.');
             } else if (message.type === 'image') {
-                console.log('Received image message:', message);
+
 
                 // Call the webhook before sending the response to the user
-            const webhookResponse = await callWebhook("https://hook.us1.make.com/8i6ikx22ov6gkl5hvjtssz22uw9vu1dq",message.text.body,sender.to,sender.name);
-                await sendWhapiRequest('messages/text', { to: sender.to, body: "IMAGE RECEIVED" });
+        const webhookResponse = await callWebhook("https://hook.us1.make.com/8i6ikx22ov6gkl5hvjtssz22uw9vu1dq",message.image.link,sender.to,sender.name);
                 if (webhookResponse) {
                     // Send the response from the webhook to the user
-                   
+                    await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
                 } else {
                     console.error('No valid response from webhook.');
                 }
