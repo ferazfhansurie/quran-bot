@@ -9,59 +9,79 @@ const openai = new OpenAI({
     endpoint: 'https://api.openai.com'
 });
 
+const app = express();
+app.use(bodyParser.json());
+
+// Define workflow steps
+const steps = {
+    START: 'start',
+    STEP_ONE: 'step_one',
+    STEP_TWO: 'step_two',
+    FINISH: 'finish'
+};
+
+// Store user state (current step)
+const userState = new Map();
+
 async function handleNewMessages(req, res) {
     const BILLERT_AGENT_ID = 'asst_2pYk0Z14FwskCX8UIxDDQmyS';
     try {
-        console.log('Handling new messages...');
+   
         const receivedMessages = req.body.messages;
-
+        console.log('Handling new messages...',receivedMessages);
         for (const message of receivedMessages) {
             if (message.from_me) break;
 
             const sender = {
                 to: message.chat_id,
-                name:message.from_name
+                name: message.from_name
             };
 
-            if (message.type === 'text') {
-                console.log('Received text message:', message);
+            // Get current step or set to START if not defined
+            let currentStep = userState.get(sender.to) || steps.START;
 
-                // Call the webhook before sending the response to the user
-                const webhookResponse = await callWebhook('https://hook.us1.make.com/9cdty1fgdtlh0cheynfftori14d1ch2a',message.text.body,sender.to,sender.name);
-                
-                if (webhookResponse) {
-                    // Send the response from the webhook to the user
-                    await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
-                } else {
-                    console.error('No valid response from webhook.');
-                }
-
-                console.log('Response sent.');
-            } else if (message.type === 'image') {
-
-
-                // Call the webhook before sending the response to the user
-        const webhookResponse = await callWebhook("https://hook.us1.make.com/8i6ikx22ov6gkl5hvjtssz22uw9vu1dq",message.image.link,sender.to,sender.name);
-                if (webhookResponse) {
-                    // Send the response from the webhook to the user
-                    await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
-                } else {
-                    console.error('No valid response from webhook.');
-                }
-
-                console.log('Response sent.');
-            } else {
-                // Handle non-text messages here
+            switch (currentStep) {
+                case steps.START:
+                    const webhookResponse = await callWebhook('https://hook.us1.make.com/ip9bkgkfweqnpkyv1akwkqtgi065y4hp',message.text.body,sender.to,sender.name);
+                    // Handle initial step
+                    const pollParams = {
+                        to: sender.to,
+                        title: 'Cik kerja sebagai apa?',
+                        options: ['Kerajaan', 'Swasta', 'Pencen'],
+                        count: 1,
+                        view_once: true
+                    };
+                    await sendWhapiRequest('/messages/poll', pollParams);
+                    userState.set(sender.to, steps.STEP_ONE); // Update user state
+                    break;
+                case steps.STEP_ONE:
+                    // Handle step one
+                    await sendWhapiRequest('messages/text', { to: sender.to, body: 'You are now in Step One. Please enter some text.' });
+                    userState.set(sender.to, steps.STEP_TWO); // Update user state
+                    break;
+                case steps.STEP_TWO:
+                    // Handle step two
+                    await sendWhapiRequest('messages/text', { to: sender.to, body: 'You are now in Step Two. Please enter some text.' });
+                    userState.set(sender.to, steps.FINISH); // Update user state
+                    break;
+                case steps.FINISH:
+                    // Handle final step
+                    await sendWhapiRequest('messages/text', { to: sender.to, body: 'Thank you for completing the workflow!' });
+                    userState.delete(sender.to); // Reset user state
+                    break;
+                default:
+                    // Handle unrecognized step
+                    console.error('Unrecognized step:', currentStep);
+                    break;
             }
         }
 
         res.send('All messages processed');
     } catch (e) {
         console.error('Error:', e.message);
-        res.send(e.message);
+        res.status(500).send('Internal Server Error');
     }
 }
-
 async function callWebhook(webhook,senderText,senderNumber,senderName) {
     console.log('Calling webhook...');
     const webhookUrl = webhook;
@@ -94,9 +114,6 @@ async function sendWhapiRequest(endpoint, params = {}, method = 'POST') {
     console.log('Whapi response:', JSON.stringify(jsonResponse, null, 2));
     return jsonResponse;
 }
-
-const app = express();
-app.use(bodyParser.json());
 
 app.get('/', function (req, res) {
     res.send('Bot is running');
