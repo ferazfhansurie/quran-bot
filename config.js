@@ -8,7 +8,7 @@ module.exports = {
 // The ID of the product we will send for the example. Create a product in your WhatsApp and find out the product ID: https://whapi.readme.io/reference/getproducts
     product: '6559353560856703',
     // Bot`s URL (for static file). Webhook Link to your server. At ( {server link}/hook ), when POST is requested, processing occurs
-    botUrl: "https://6fa5-2001-e68-624c-3300-5d18-ba70-15d-bc4.ngrok-free.app/hook",
+    botUrl: "https://e68c-2001-d08-e6-4112-d07d-80ec-47d0-fd79.ngrok-free.app/hook",
     // Bot's Port (for hook handler). Don't use 443 port.
     port: "80"
 }
