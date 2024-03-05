@@ -19,6 +19,12 @@ const steps = {
     STEP_TWO: 'step_two',
     STEP_THREE: 'step_three',
     STEP_FOUR: 'step_four',
+    STEP_UMUR:'step_umur',
+    STEP_6_PELAJAR:'step_6',
+    STEP_1_PELAJAR:'step_1',
+    STEP_SEJARAH: 'step_sejarah',
+    STEP_TINGGAL: 'step_tinggal',
+    STEP_WEBHOOK:'step_webhook',
     FINISH: 'finish'
 };
 
@@ -33,16 +39,57 @@ async function handleNewMessages(req, res) {
         //console.log('Handling new messages...',receivedMessages);
         for (const message of receivedMessages) {
             if (message.from_me) break;
-
+console.log(message)
+  
             const sender = {
                 to: message.chat_id,
                 name: message.from_name
             };
+  // Call the webhook before sending the response to the user
+  if (message.type == "text" ) {
+    // Handle step one
+    if(message.text.body.includes('book appointment')){
+        await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih tuan/puan kerana berminat untuk mendapatkan perkhidmatan mengaji bersama BHQ (baca huruf Quran)' });
+        await sendWhapiRequest('messages/text', { to: sender.to, body: 
+            'Kelas Online Personal:\n' + // Add new line for bullet points
+            '• Frekuensi: 4 kali sebulan\n' + // Bullet point 1
+            '• Yuran: RM240 (4 sesi) / RM480 (8 sesi)\n'});
+        await sendWhapiRequest('messages/text', { to: sender.to, body: 
+            'Kelas Online Kumpulan:\n' + 
+            '• Frekuensi: 4 kali sebulan\n' + 
+            '• Yuran: RM480 (4 sesi) / RM960 (8 sesi)\n'});
+        await sendWhapiRequest('messages/text', { to: sender.to, body: 
+            'Kelas Offline Personal:\n' + 
+            '• Frekuensi: 4 kali sebulan\n' + 
+            '• Yuran: RM240 (4 sesi) / RM480 (8 sesi)\n'});
+        await sendWhapiRequest('messages/text', { to: sender.to, body: 
+            'Kelas Offline Kumpulan:\n' + 
+            '• Frekuensi: 4 kali sebulan\n' + 
+            '• Yuran: RM480 (4 sesi) / RM960 (8 sesi)\n'});
+        await sendWhapiRequest('messages/text', { to: sender.to, body: 
+            'Kelas Offline Mingguan (Pusat Kota Damansara):\n' + 
+            '• Frekuensi: 4 kali sebulan\n' + 
+            '• Yuran: RM100 sebulan (6 pelajar) / RM600 (6 pelajar)\n'});
+        await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan kelas yang dicari?' });
+        const pollParams = {
+            to: sender.to,
+            title: 'Boleh saya tahu pilihan kelas yang dicari?',
+            options: ['Kelas Online', 'Kelas Offline', 'Kelas ke pusat Al-Quran Di Kota Damansara'],
+            count: 1,
+            view_once: true
+        };
+        webhook = await sendWhapiRequest('/messages/poll', pollParams);
+        console.log('result',webhook.message.poll.results);
+        userState.set(sender.to, steps.STEP_TWO); // Update user state
+        break;
+    }
+   
+}
 
             // Get current step or set to START if not defined
             let currentStep = userState.get(sender.to) || steps.START;
             
-            
+             
            
             switch (currentStep) {
                 case steps.START:
@@ -147,19 +194,15 @@ async function handleNewMessages(req, res) {
                         if(message.action.votes[0]=== selected_Option[0])
                         {
                             await sendWhapiRequest('messages/text', { to: sender.to, body: 'Baik terima kasih' });
-                            userState.set(sender.to, steps.FINISH); // Update user state
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan tarikh dan masa untuk kelas anda?' });
+                            userState.set(sender.to, steps.STEP_1_PELAJAR); // Update user state
                         break;
                         }
                         if(message.action.votes[0]=== selected_Option[1])
                         {
-                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Baik terima kasih, izinkan saya kongsikan keperluan mengambil kelas online personal' });
-                            await sendWhapiRequest('messages/text', { to: sender.to, body: 
-                                'Kenapa tuan/ puan perlu ambil kelas mengaji offline personal?\n' + 
-                                '• Membantu pelajar belajar dalam kumpulan, mengajar pelajar untuk lebih toleransi antara satu sama lain\n' + 
-                                '• Waktu pembelajaran yang efektif. Masa belajar 2jam untuk 6 pelajar\n' +
-                                '• Belajar 1 kumpulan 1 level\n' +
-                                '• Guru BHQ profesional dan berskill\n'});
-                                userState.set(sender.to, steps.FINISH); // Update user state
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Baik terima kasih' });
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan tarikh dan masa untuk kelas anda?' });
+                            userState.set(sender.to, steps.STEP_6_PELAJAR); // Update user state
                         break;
                         }
                         
@@ -179,7 +222,8 @@ async function handleNewMessages(req, res) {
                                 '• Guru BHQ profesional dan berskill\n'+
                                 '• Berhawa dingin dan keselamatan terjamin (Insyaallah)\n'+
                                 '• Waktu dan hari flexible\n' });
-                                userState.set(sender.to, steps.FINISH); // Update user state
+                                await sendWhapiRequest('messages/text', { to: sender.to, body: 'Apakah nama penuh pelajar?\n' });
+                                userState.set(sender.to, steps.STEP_UMUR); // Update user state
                         break;
                         }
                         if(message.action.votes[0]=== selected_Option2[1])
@@ -192,18 +236,74 @@ async function handleNewMessages(req, res) {
                                 '• 1 guru 12 pelajar sahaja\n' +
                                 '• Kelas berhawa dingin dan keselamatan terjamin, CCTV\n' +
                                 '• Guru BHQ profesional dan berskill\n'});
-                                userState.set(sender.to, steps.FINISH); // Update user state
+                                await sendWhapiRequest('messages/text', { to: sender.to, body: 'Apakah nama penuh pelajar?\n' });
+                                userState.set(sender.to, steps.STEP_UMUR); // Update user state
                         break;
                         }
+                        case steps.STEP_1_PELAJAR:
+                            // Handle final step
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 
+                               'Terima kasih, izinkan saya kongsikan keperluan mengambil kelas online personal' });
+                               await sendWhapiRequest('messages/text', { to: sender.to, body: 
+                                'Kenapa tuan/puan perlu ambil kelas online personal? \n' + 
+                                '• Kelas lebih fokus 1guru 1pelajar 60 minit tidak berkongsi dengan pelajar lain\n' + 
+                                '• Aktiviti mengenal dan membaca ayat Al-Quran lebih banyak dan lebih cepat pada pelajar\n' +
+                                '• Banyak aktiviti yang boleh dilakukan bagi menjadikan pelajar cepat mengenal atau membaca Al-Quran \n' +
+                                '• Belajar mengikut tahap pengetahuan pelajar\n' +
+                                '• Guru BHQ profesional dan berskill\n'});
+                                await sendWhapiRequest('messages/text', { to: sender.to, body: 'Apakah nama penuh pelajar?\n' });
+                               userState.set(sender.to, steps.STEP_UMUR); // Update user state
+                            break;
+                            case steps.STEP_6_PELAJAR:
+                                // Handle final step
+                                await sendWhapiRequest('messages/text', { to: sender.to, body: 
+                                   'Terima kasih, izinkan saya kongsikan keperluan mengambil kelas online kumpulan' });
+                                   await sendWhapiRequest('messages/text', { to: sender.to, body: 
+                                    'Kenapa tuan/ puan perlu ambil kelas online kumpulan? \n' + 
+                                    '• Membantu pelajar belajar dalam kumpulan, mengajar pelajar untuk lebih toleransi antara satu sama lain\n' + 
+                                    '• Waktu pembelajaran yang efektif. Masa belajar 2jam untuk 6 pelajar \n' +
+                                    '• Belajar 1 kumpulan 1level  \n' +
+                                    '• Guru BHQ profesional dan berskill\n'});
+                                    await sendWhapiRequest('messages/text', { to: sender.to, body: 'Apakah nama penuh pelajar?\n' });
+                                   userState.set(sender.to, steps.STEP_UMUR); // Update user state
+                                break;
+                        case steps.STEP_UMUR:
+                            // Handle final step
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 
+                               'Seterusnya, apakah umur pelajar??\n' });
+                               userState.set(sender.to, steps.STEP_SEJARAH); // Update user state
+                            break;
+                        case steps.STEP_SEJARAH:
+                            // Handle final step
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 
+                               'Sejarah mengaji?\n' });
+                               userState.set(sender.to, steps.STEP_TINGGAL); // Update user state
+                            break;  
+                        case steps.STEP_TINGGAL:
+                            // Handle final step
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 
+                               'Akhir sekali, berapa lama tinggal kelas mengaji?\n' });
+                               userState.set(sender.to, steps.FINISH); // Update user state
+                            break;      
                         case steps.FINISH:
                         // Handle final step
                         await sendWhapiRequest('messages/text', { to: sender.to, body: 
-                            'Boleh saya dapatkan detail pelajar?\n' + 
-                            '• Apakah nama penuh pelajar?\n' + 
-                            '• Berapakah umur pelajar?\n' +
-                            '• Sejarah mengaji?\n' +
-                            '• berapa lama tinggal kelas mengaji?\n'});
-                        userState.delete(sender.to); // Reset user state
+                            'Alhamdullilah terima kasih,Team kami akan proses pesanan anda dan contact anda secepat mungkin.\n' });
+                            userState.set(sender.to, steps.STEP_WEBHOOK); // Update user state
+                        break;
+                        case steps.STEP_WEBHOOK:
+                        // Handle final step
+                       
+                const webhookResponse = await callWebhook('https://hook.us1.make.com/51ydvf5zruu16vkvfqpsxqq4w89cppxq',message.text.body,sender.to,sender.name);
+                
+                if (webhookResponse) {
+                    // Send the response from the webhook to the user
+                    await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                } else {
+                    console.error('No valid response from webhook.');
+                }
+
+                console.log('Response sent.');
                         break;
                 default:
                     // Handle unrecognized step
