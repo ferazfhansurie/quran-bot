@@ -3,6 +3,7 @@ const bodyParser = require('body-parser');
 const fetch = require('node-fetch');
 const OpenAI = require('openai');
 const config = require('./config');
+require('dotenv').config();
 
 const openai = new OpenAI({
     apiKey: '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',
@@ -11,6 +12,17 @@ const openai = new OpenAI({
 
 const app = express();
 app.use(bodyParser.json());
+
+app.get('/', function (req, res) {
+    res.send('Bot is running');
+});
+
+app.post('/hook/messages', handleNewMessages);
+
+const port = process.env.PORT;
+app.listen(port, function () {
+    console.log(`Listening on port ${port}...`);
+});
 
 // Define workflow steps
 const steps = {
@@ -25,6 +37,24 @@ const steps = {
     STEP_SEJARAH: 'step_sejarah',
     STEP_TINGGAL: 'step_tinggal',
     STEP_WEBHOOK:'step_webhook',
+    STEP_MASA_MINGGUAN: 'step_masa_mingguan',
+    STEP_MASA_HARIAN: 'step_masa_harian',
+
+    //untuk mingguan guru
+    STEP_GURU_MINGGUAN_KHAMIS: 'step_guru_mingguan_khamis',
+    STEP_GURU_MINGGUAN_JUMAAT: 'step_guru_mingguan_jumaat',
+    STEP_GURU_MINGGUAN_SABTU: 'step_guru_mingguan_sabtu',
+    STEP_GURU_MINGGUAN_AHAD: 'step_guru_mingguan_ahad',
+
+    //untuk harian guru
+    STEP_GURU_HARIAN_ISNIN: 'step_guru_harian_isnin',
+    STEP_GURU_HARIAN_SELASA: 'step_guru_harian_selasa',
+    STEP_GURU_HARIAN_RABU: 'step_guru_harian_rabu',
+    STEP_GURU_HARIAN_KHAMIS: 'step_guru_harian_khamis',
+    STEP_GURU_HARIAN_JUMAAT: 'step_guru_harian_jumaat',
+
+
+    STEP_PILIHAN_GURU: 'step_pilihan_guru',
     FINISH: 'finish'
 };
 
@@ -222,8 +252,17 @@ console.log(message)
                                 '• Guru BHQ profesional dan berskill\n'+
                                 '• Berhawa dingin dan keselamatan terjamin (Insyaallah)\n'+
                                 '• Waktu dan hari flexible\n' });
-                                await sendWhapiRequest('messages/text', { to: sender.to, body: 'Apakah nama penuh pelajar?\n' });
-                                userState.set(sender.to, steps.STEP_UMUR); // Update user state
+
+                                const pollParams = {
+                                    to: sender.to,
+                                    title: 'Boleh saya tahu pilihan hari untuk kelas?',
+                                    options: ['Isnin', 'Khamis', 'Jumaat', 'Sabtu', 'Ahad'],
+                                    count: 1,
+                                    view_once: true
+                                };
+                                webhook = await sendWhapiRequest('/messages/poll', pollParams);
+                                console.log('result',webhook.message.poll.results);
+                                userState.set(sender.to, steps.STEP_MASA_MINGGUAN); // Update user state
                         break;
                         }
                         if(message.action.votes[0]=== selected_Option2[1])
@@ -236,16 +275,593 @@ console.log(message)
                                 '• 1 guru 12 pelajar sahaja\n' +
                                 '• Kelas berhawa dingin dan keselamatan terjamin, CCTV\n' +
                                 '• Guru BHQ profesional dan berskill\n'});
-                                await sendWhapiRequest('messages/text', { to: sender.to, body: 'Apakah nama penuh pelajar?\n' });
-                                userState.set(sender.to, steps.STEP_UMUR); // Update user state
+                                const pollParams = {
+                                    to: sender.to,
+                                    title: 'Boleh saya tahu pilihan hari untuk kelas?',
+                                    options: ['Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat'],
+                                    count: 1,
+                                    view_once: true
+                                };
+                                webhook = await sendWhapiRequest('/messages/poll', pollParams);
+                                console.log('result',webhook.message.poll.results);
+                                userState.set(sender.to, steps.STEP_MASA_HARIAN); // Update user state
                         break;
                         }
+                        case steps.STEP_MASA_MINGGUAN:
+                             //Handle final step
+                             let selected_Option3 = [];
+                        for (const result of webhook.message.poll.results) {
+                            selected_Option3.push (result.id);
+                        }
+                        if(message.action.votes[0]=== selected_Option3[0])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Baik terima kasih' });
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Untuk hari isnin kelas hanya waktu 5.00pm-7.00pm' });
+                            let time = webhook.message.poll.results[0].name;
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option3[1])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Baik terima kasih' });
+                            const pollParams = {
+                                to: sender.to,
+                                title: 'Boleh saya tahu pilihan masa untuk kelas?',
+                                options: ['5.00pm-7.00pm', '7.00pm-9.00pm'],
+                                count: 1,
+                                view_once: true
+                            };
+                            webhook = await sendWhapiRequest('/messages/poll', pollParams);
+                            console.log('result',webhook.message.poll.results);
+                            userState.set(sender.to, steps.STEP_GURU_MINGGUAN_KHAMIS); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option3[2])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Baik terima kasih' });
+                            const pollParams = {
+                                to: sender.to,
+                                title: 'Boleh saya tahu pilihan masa untuk kelas?',
+                                options: ['5.00pm-7.00pm', '7.00pm-9.00pm'],
+                                count: 1,
+                                view_once: true
+                            };
+                            webhook = await sendWhapiRequest('/messages/poll', pollParams);
+                            console.log('result',webhook.message.poll.results);
+                            userState.set(sender.to, steps.STEP_GURU_MINGGUAN_JUMAAT); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option3[3])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Baik terima kasih' });
+                            const pollParams = {
+                                to: sender.to,
+                                title: 'Boleh saya tahu pilihan masa untuk kelas?',
+                                options: ['9.00am-11.00am', '11.00am-1.00pm'],
+                                count: 1,
+                                view_once: true
+                            };
+                            webhook = await sendWhapiRequest('/messages/poll', pollParams);
+                            console.log('result',webhook.message.poll.results);
+                            userState.set(sender.to, steps.STEP_GURU_MINGGUAN_SABTU); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option3[4])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Baik terima kasih' });
+                            const pollParams = {
+                                to: sender.to,
+                                title: 'Boleh saya tahu pilihan masa untuk kelas?',
+                                options: ['9.00am-11.00am', '11.00am-1.00pm'],
+                                count: 1,
+                                view_once: true
+                            };
+                            webhook = await sendWhapiRequest('/messages/poll', pollParams);
+                            console.log('result',webhook.message.poll.results);
+                            userState.set(sender.to, steps.STEP_GURU_MINGGUAN_AHAD); // Update user state
+                        break;
+                        }
+                        
+
+                        case steps.STEP_MASA_HARIAN:
+                            //Handle final step
+                            let selected_Option5 = [];
+                        for (const result of webhook.message.poll.results) {
+                            selected_Option5.push (result.id);
+                        }
+                        if(message.action.votes[0]=== selected_Option5[0])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Baik terima kasih' });
+                            const pollParams = {
+                                to: sender.to,
+                                title: 'Boleh saya tahu pilihan masa untuk kelas?',
+                                options: ['1.00pm-3.00pm', '3.00pm-5.00pm'],
+                                count: 1,
+                                view_once: true
+                            };
+                            webhook = await sendWhapiRequest('/messages/poll', pollParams);
+                            console.log('result',webhook.message.poll.results);
+                            userState.set(sender.to, steps.STEP_GURU_HARIAN_ISNIN); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option5[1])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Baik terima kasih' });
+                            const pollParams = {
+                                to: sender.to,
+                                title: 'Boleh saya tahu pilihan masa untuk kelas?',
+                                options: ['1.00pm-3.00pm', '3.00pm-5.00pm'],
+                                count: 1,
+                                view_once: true
+                            };
+                            webhook = await sendWhapiRequest('/messages/poll', pollParams);
+                            console.log('result',webhook.message.poll.results);
+                            userState.set(sender.to, steps.STEP_GURU_HARIAN_SELASA); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option5[2])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Baik terima kasih' });
+                            const pollParams = {
+                                to: sender.to,
+                                title: 'Boleh saya tahu pilihan masa untuk kelas?',
+                                options: ['1.00pm-3.00pm', '3.00pm-5.00pm'],
+                                count: 1,
+                                view_once: true
+                            };
+                            webhook = await sendWhapiRequest('/messages/poll', pollParams);
+                            console.log('result',webhook.message.poll.results);
+                            userState.set(sender.to, steps.STEP_GURU_HARIAN_RABU); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option5[3])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Baik terima kasih' });
+                            const pollParams = {
+                                to: sender.to,
+                                title: 'Boleh saya tahu pilihan masa untuk kelas?',
+                                options: ['1.00pm-3.00pm', '3.00pm-5.00pm'],
+                                count: 1,
+                                view_once: true
+                            };
+                            webhook = await sendWhapiRequest('/messages/poll', pollParams);
+                            console.log('result',webhook.message.poll.results);
+                            userState.set(sender.to, steps.STEP_GURU_HARIAN_KHAMIS); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option5[4])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Baik terima kasih' });
+                            const pollParams = {
+                                to: sender.to,
+                                title: 'Boleh saya tahu pilihan masa untuk kelas?',
+                                options: ['1.00pm-3.00pm', '3.00pm-5.00pm'],
+                                count: 1,
+                                view_once: true
+                            };
+                            webhook = await sendWhapiRequest('/messages/poll', pollParams);
+                            console.log('result',webhook.message.poll.results);
+                            userState.set(sender.to, steps.STEP_GURU_HARIAN_JUMAAT); // Update user state
+                        break;
+                        }
+                        
+                        //untuk mingguan
+                        case steps.STEP_GURU_MINGGUAN_KHAMIS:
+                            //Handle final step
+                            let selected_Option4 = [];
+                        for (const result of webhook.message.poll.results) {
+                            selected_Option4.push (result.id);
+                        }
+                        if(message.action.votes[0]=== selected_Option4[0])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[0].name;
+                            let date = 'Khamis';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time,date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option4[1])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[1].name;
+                            let date = 'Khamis';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time, date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        case steps.STEP_GURU_MINGGUAN_JUMAAT:
+                            //Handle final step
+                            let selected_Option7 = [];
+                        for (const result of webhook.message.poll.results) {
+                            selected_Option7.push (result.id);
+                        }
+                        if(message.action.votes[0]=== selected_Option7[0])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[0].name;
+                            let date = 'Jumaat';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time,date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option7[1])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[1].name;
+                            let date = 'Jumaat';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time, date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        case steps.STEP_GURU_MINGGUAN_SABTU:
+                            //Handle final step
+                            let selected_Option8 = [];
+                        for (const result of webhook.message.poll.results) {
+                            selected_Option8.push (result.id);
+                        }
+                        if(message.action.votes[0]=== selected_Option8[0])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[0].name;
+                            let date = 'Sabtu';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time,date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option8[1])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[1].name;
+                            let date = 'Sabtu';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time, date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        case steps.STEP_GURU_MINGGUAN_AHAD:
+                            //Handle final step
+                            let selected_Option9 = [];
+                        for (const result of webhook.message.poll.results) {
+                            selected_Option9.push (result.id);
+                        }
+                        if(message.action.votes[0]=== selected_Option9[0])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[0].name;
+                            let date = 'Ahad';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time,date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option9[1])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[1].name;
+                            let date = 'Ahad';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time, date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+
+                        //untuk harian
+                        case steps.STEP_GURU_HARIAN_ISNIN:
+                        //Handle final step
+                        let selected_Option6 = [];
+                        for (const result of webhook.message.poll.results) {
+                            selected_Option6.push (result.id);
+                        }
+                        if(message.action.votes[0]=== selected_Option6[0])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[0].name;
+                            let date = 'Isnin';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time, date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option6[1])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[1].name;
+                            let date = 'Isnin';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time, date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        case steps.STEP_GURU_HARIAN_SELASA:
+                        //Handle final step
+                        let selected_Option10 = [];
+                        for (const result of webhook.message.poll.results) {
+                            selected_Option10.push (result.id);
+                        }
+                        if(message.action.votes[0]=== selected_Option10[0])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[0].name;
+                            let date = 'Selasa';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time, date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option10[1])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[1].name;
+                            let date = 'Selasa';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time, date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        case steps.STEP_GURU_HARIAN_RABU:
+                        //Handle final step
+                        let selected_Option11 = [];
+                        for (const result of webhook.message.poll.results) {
+                            selected_Option11.push (result.id);
+                        }
+                        if(message.action.votes[0]=== selected_Option11[0])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[0].name;
+                            let date = 'Rabu';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time, date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option11[1])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[1].name;
+                            let date = 'Rabu';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time, date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        case steps.STEP_GURU_HARIAN_KHAMIS:
+                        //Handle final step
+                        let selected_Option12 = [];
+                        for (const result of webhook.message.poll.results) {
+                            selected_Option12.push (result.id);
+                        }
+                        if(message.action.votes[0]=== selected_Option12[0])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[0].name;
+                            let date = 'Khamis';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time, date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option12[1])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[1].name;
+                            let date = 'Khamis';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time, date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        case steps.STEP_GURU_HARIAN_JUMAAT:
+                        //Handle final step
+                        let selected_Option13 = [];
+                        for (const result of webhook.message.poll.results) {
+                            selected_Option13.push (result.id);
+                        }
+                        if(message.action.votes[0]=== selected_Option13[0])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[0].name;
+                            let date = 'Jumaat';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time, date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+                        if(message.action.votes[0]=== selected_Option13[1])
+                        {
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Terima kasih' });
+                            let time = webhook.message.poll.results[1].name;
+                            let date = 'Jumaat';
+                            console.log(time);
+                            const webhookResponse = await callWebhookAppointment('https://hook.us1.make.com/dste7lb0liuf6klkvknnweztaf7mqzoh',time,sender.to,sender.name,time, date);
+                
+                             if (webhookResponse) {
+                            // Send the response from the webhook to the user
+                             await sendWhapiRequest('messages/text', { to: sender.to, body: webhookResponse });
+                            } else {
+                            console.error('No valid response from webhook.');
+                            }
+                            console.log('Response sent.');
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Boleh saya tahu pilihan guru anda?' });
+                            userState.set(sender.to, steps.STEP_PILIHAN_GURU); // Update user state
+                        break;
+                        }
+
                         case steps.STEP_1_PELAJAR:
                             // Handle final step
                             await sendWhapiRequest('messages/text', { to: sender.to, body: 
                                'Terima kasih, izinkan saya kongsikan keperluan mengambil kelas online personal' });
                                await sendWhapiRequest('messages/text', { to: sender.to, body: 
-                                'Kenapa tuan/puan perlu ambil kelas online personal? \n' + 
+                                'Kenapa tuan/puan perlu ambil kelas online personal?\n' + 
                                 '• Kelas lebih fokus 1guru 1pelajar 60 minit tidak berkongsi dengan pelajar lain\n' + 
                                 '• Aktiviti mengenal dan membaca ayat Al-Quran lebih banyak dan lebih cepat pada pelajar\n' +
                                 '• Banyak aktiviti yang boleh dilakukan bagi menjadikan pelajar cepat mengenal atau membaca Al-Quran \n' +
@@ -267,6 +883,12 @@ console.log(message)
                                     await sendWhapiRequest('messages/text', { to: sender.to, body: 'Apakah nama penuh pelajar?\n' });
                                    userState.set(sender.to, steps.STEP_UMUR); // Update user state
                                 break;
+                                case steps.STEP_PILIHAN_GURU:
+                            // Handle final step
+                            await sendWhapiRequest('messages/text', { to: sender.to, body: 'Apakah nama penuh pelajar?\n' });
+                            userState.set(sender.to, steps.STEP_UMUR); // Update user state
+                            break;
+
                         case steps.STEP_UMUR:
                             // Handle final step
                             await sendWhapiRequest('messages/text', { to: sender.to, body: 
@@ -333,7 +955,21 @@ async function callWebhook(webhook,senderText,senderNumber,senderName) {
     console.log('Webhook response:', responseData); // Log raw response
  return responseData;
 }
-
+async function callWebhookAppointment(webhook,senderText,senderNumber,senderName,time, date) {
+    console.log('Calling webhook...');
+    const webhookUrl = webhook;
+    const body = JSON.stringify({ senderText,senderNumber,senderName, time, date }); // Include sender's text in the request body
+    const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: body
+    });
+    const responseData = await response.text(); // Get response as text
+    console.log('Webhook response:', responseData); // Log raw response
+ return responseData;
+}
 async function sendWhapiRequest(endpoint, params = {}, method = 'POST') {
     console.log('Sending request to Whapi.Cloud...');
     const options = {
@@ -355,9 +991,5 @@ app.get('/', function (req, res) {
     res.send('Bot is running');
 });
 
-app.post('/hook/messages', handleNewMessages);
 
-const port = config.port || (config.botUrl.indexOf('https:') === 0 ? 443 : 80);
-app.listen(port, function () {
-    console.log(`Listening on port ${port}...`);
-});
+
